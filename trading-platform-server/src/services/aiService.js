@@ -1,26 +1,32 @@
-const {
-    GoogleGenerativeAI
-} = require('@google/generative-ai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Access your API key as an environment variable (see "Set up your API key" above)
+// Ensure the API key is loaded
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error('GEMINI_API_KEY environment variable is not set.');
+}
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
- * Generates a chat response from the Gemini AI.
- * @param {Array<Object>} chatHistory - Array of previous messages in the chat.
- * @param {string} newMessage - The new message from the user.
- * @returns {Promise<string>} The text response from the AI.
- * @throws {Error} If there's an error interacting with the AI.
+ * Generates a chat response using the Gemini API.
+ * Can handle either a full chat history or a single prompt.
+ *
+ * @param {Array} chatHistory - An array of chat messages (optional).
+ * @param {string} newMessage - The new message or prompt from the user.
+ * @returns {Promise<string>} The generated text response.
  */
 async function generateChatResponse(chatHistory, newMessage) {
     try {
-        // For text-only input, use the gemini-pro model
-        // For text and image input, use the gemini-pro-vision model
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-1.5-pro'
-        });
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
-        // Start a chat session with the provided history
+        // If there is no history, treat the newMessage as the initial prompt.
+        if (!chatHistory || chatHistory.length === 0) {
+            const result = await model.generateContent(newMessage);
+            const response = await result.response;
+            return response.text();
+        }
+
+        // If there is history, start a chat session.
         const chat = model.startChat({
             history: chatHistory,
             generationConfig: {
@@ -28,16 +34,15 @@ async function generateChatResponse(chatHistory, newMessage) {
             },
         });
 
-        // Send the new message to the chat
         const result = await chat.sendMessage(newMessage);
         const response = await result.response;
-        const text = response.text();
-
-        return text;
+        return response.text();
 
     } catch (error) {
         console.error('Error generating chat response:', error);
-        throw new Error('Failed to generate chat response.');
+        // Instead of re-throwing, return a user-friendly error message.
+        // This prevents the entire server from crashing on an API error.
+        return 'I am currently unable to respond. Please try again later.';
     }
 }
 

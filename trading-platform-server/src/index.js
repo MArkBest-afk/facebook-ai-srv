@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const http = require('http'); // Use http for WebSocket integration
 const WebSocket = require('ws'); // Use ws for simplicity, can be replaced with socket.io
 const helmet = require('helmet'); // Import helmet middleware
+const cors = require('cors'); // Import cors middleware
 
 const { runTradingSimulation } = require('/home/user/facebook-ai-srv/trading-platform-server/src/services/tradingService.js');
 const { generateManagerRecommendations } = require('/home/user/facebook-ai-srv/trading-platform-server/src/services/managerRecommendationService.js');
@@ -19,6 +20,14 @@ app.use(express.json());
 
 // Security middleware: set various secure HTTP headers
 app.use(helmet());
+
+// CORS configuration to allow requests from your frontend
+const corsOptions = {
+  origin: 'https://studio--demotrade-ai.us-central1.hosted.app',
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+
 
 // Check for required environment variables
 if (!process.env.MONGODB_URI) {

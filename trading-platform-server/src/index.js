@@ -1,21 +1,19 @@
+console.log(`--- SERVER STARTING: Version ${new Date().toISOString()} ---`);
 
-// Load environment variables from .env file
 require('dotenv').config();
-
 const express = require('express');
-const mongoose = require('mongoose');
 const http = require('http');
 const WebSocket = require('ws');
-const helmet = require('helmet');
+const mongoose = require('mongoose');
 const cors = require('cors');
+const helmet = require('helmet');
+const { runTradingSimulation } = require('./services/tradingService');
+const { generateManagerRecommendations } = require('./services/managerRecommendationService');
+const { initializeWebSocket } = require('./websocket/websocketManager');
 
-// Use relative paths for robustness
-const { runTradingSimulation } = require('./services/tradingService.js');
-const { generateManagerRecommendations } = require('./services/managerRecommendationService.js');
-const { initializeWebSocket } = require('./websocket/websocketManager.js');
-const errorMiddleware = require('./middleware/error.js');
-const userRoutes = require('./routes/users.js');
-const adminRoutes = require('./routes/admin.js');
+// --- Route Imports ---
+const userRoutes = require('./routes/users');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const server = http.createServer(app);
@@ -28,7 +26,7 @@ const wss = new WebSocket.Server({
     console.log('Verifying WebSocket origin:', origin);
     const allowedOrigins = [
       'https://studio--demotrade-ai.us-central1.hosted.app',
-      'http://localhost:3000' // Also allow localhost for local frontend dev
+      'http://localhost:3000'
     ];
 
     if (allowedOrigins.includes(origin)) {
@@ -50,12 +48,15 @@ app.use(helmet());
 const corsOptions = {
   origin: [
     'https://studio--demotrade-ai.us-central1.hosted.app',
-    'http://localhost:3000' // Also allow localhost for local frontend dev
+    'http://localhost:3000'
   ],
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
 
+// --- API Routes ---
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 // --- Environment Variable Checks ---
 if (!process.env.MONGODB_URI || !process.env.JWT_SECRET || !process.env.GEMINI_API_KEY) {
@@ -64,7 +65,8 @@ if (!process.env.MONGODB_URI || !process.env.JWT_SECRET || !process.env.GEMINI_A
 }
 
 // --- Database Connection ---
-mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+// Removed deprecated options for modern Mongoose versions
+mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('Connected to MongoDB...');
     // Start background services
@@ -73,17 +75,11 @@ mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTop
   })
   .catch(err => {
     console.error('Could not connect to MongoDB...', err);
+    process.exit(1); // Exit if DB connection fails
   });
 
-// --- API Routes ---
-app.use('/api/v1/users', userRoutes);
-app.use('/api/v1/admin', adminRoutes);
-
-// --- Centralized Error Handler ---
-app.use(errorMiddleware);
-
-// --- Server Startup ---
-const port = process.env.PORT || 3000;
-server.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+// --- Server Listening ---
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+  console.log(`Server is listening on port ${PORT}`);
 });

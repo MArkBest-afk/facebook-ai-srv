@@ -1,98 +1,89 @@
+
 // Load environment variables from .env file
 require('dotenv').config();
 
 const express = require('express');
 const mongoose = require('mongoose');
-const http = require('http'); // Use http for WebSocket integration
-const WebSocket = require('ws'); // Use ws for simplicity, can be replaced with socket.io
-const helmet = require('helmet'); // Import helmet middleware
-const cors = require('cors'); // Import cors middleware
+const http = require('http');
+const WebSocket = require('ws');
+const helmet = require('helmet');
+const cors = require('cors');
 
-const { runTradingSimulation } = require('/home/user/facebook-ai-srv/trading-platform-server/src/services/tradingService.js');
-const { generateManagerRecommendations } = require('/home/user/facebook-ai-srv/trading-platform-server/src/services/managerRecommendationService.js');
-const errorMiddleware = require('/home/user/facebook-ai-srv/trading-platform-server/src/middleware/error.js'); // Import error handling middleware
+// Use relative paths for robustness
+const { runTradingSimulation } = require('./services/tradingService.js');
+const { generateManagerRecommendations } = require('./services/managerRecommendationService.js');
+const { initializeWebSocket } = require('./websocket/websocketManager.js');
+const errorMiddleware = require('./middleware/error.js');
+const userRoutes = require('./routes/users.js');
+const adminRoutes = require('./routes/admin.js');
+
 const app = express();
-const server = http.createServer(app); // Create HTTP server based on Express app
-const wss = new WebSocket.Server({ server }); // Create WebSocket server on top of the HTTP server
+const server = http.createServer(app);
 
-// Middleware to parse JSON request bodies
+// --- WebSocket Server with Origin Validation ---
+const wss = new WebSocket.Server({
+  server,
+  verifyClient: (info, done) => {
+    const origin = info.origin || info.req.headers.origin;
+    console.log('Verifying WebSocket origin:', origin);
+    const allowedOrigins = [
+      'https://studio--demotrade-ai.us-central1.hosted.app',
+      'http://localhost:3000' // Also allow localhost for local frontend dev
+    ];
+
+    if (allowedOrigins.includes(origin)) {
+      done(true);
+    } else {
+      console.log(`WebSocket connection from origin ${origin} rejected.`);
+      done(false, 403, 'Forbidden');
+    }
+  }
+});
+
+initializeWebSocket(wss); // Initialize WebSocket handling
+
+// --- Middleware ---
 app.use(express.json());
-
-// Security middleware: set various secure HTTP headers
 app.use(helmet());
 
-// CORS configuration to allow requests from your frontend
+// --- CORS Configuration for HTTP Requests ---
 const corsOptions = {
-  origin: 'https://studio--demotrade-ai.us-central1.hosted.app',
+  origin: [
+    'https://studio--demotrade-ai.us-central1.hosted.app',
+    'http://localhost:3000' // Also allow localhost for local frontend dev
+  ],
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
 
 
-// Check for required environment variables
-if (!process.env.MONGODB_URI) {
-  console.error('FATAL ERROR: MONGODB_URI is not defined.');
+// --- Environment Variable Checks ---
+if (!process.env.MONGODB_URI || !process.env.JWT_SECRET || !process.env.GEMINI_API_KEY) {
+  console.error('FATAL ERROR: Required environment variables are not defined.');
   process.exit(1);
 }
 
-if (!process.env.JWT_SECRET) {
-    console.error('FATAL ERROR: JWT_SECRET is not defined.');
-    process.exit(1);
-}
-
-if (!process.env.GEMINI_API_KEY) {
-    console.error('FATAL ERROR: GEMINI_API_KEY is not defined.');
-    process.exit(1);
-}
-
-
-// Connect to MongoDB
+// --- Database Connection ---
 mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
     console.log('Connected to MongoDB...');
-    // Start the trading simulation timer
-    // TODO: Make interval durations configurable via environment variables
-    const tradingInterval = setInterval(runTradingSimulation, 1000); // Run every 1 second
+    // Start background services
+    setInterval(runTradingSimulation, 1000);
+    setInterval(generateManagerRecommendations, 300000); // 5 minutes
   })
   .catch(err => {
     console.error('Could not connect to MongoDB...', err);
-    // If connection fails, clear the interval if it was set (though unlikely here)
-    // clearInterval(tradingInterval); // This line is technically not needed as setInterval won't be called
   });
 
-// Set up the manager recommendation timer after a short delay to allow DB connection
-setTimeout(() => {
-  if (mongoose.connection.readyState === 1) { // Check if connected
-    // TODO: Make interval duration configurable
-    setInterval(generateManagerRecommendations, 300000); // Run every 5 minutes
-  }
-}, 5000); // Wait 5 seconds before starting the recommendation timer
-
-// Import and use user routes
-// Basic WebSocket connection handling
-wss.on('connection', function connection(ws) {
-  console.log('Client connected via WebSocket');
-
-  ws.on('message', function incoming(message) {
-    console.log('received: %s', message);
-    // TODO: Handle incoming WebSocket messages (e.g., 'join')
-  });
-
-  ws.send('Welcome!'); // Send a welcome message to the client
-});
-
-const userRoutes = require('/home/user/facebook-ai-srv/trading-platform-server/src/routes/users.js');
+// --- API Routes ---
 app.use('/api/v1/users', userRoutes);
-
-// Import and use admin routes
-const adminRoutes = require('/home/user/facebook-ai-srv/trading-platform-server/src/routes/admin.js');
 app.use('/api/v1/admin', adminRoutes);
 
-// Centralized error handler middleware
+// --- Centralized Error Handler ---
 app.use(errorMiddleware);
 
-
+// --- Server Startup ---
 const port = process.env.PORT || 3000;
-server.listen(port, () => { // Start the HTTP server, which also listens for WebSocket connections
+server.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { initUser, selectRobot, toggleTrading, getUser } = require('../controllers/userController');
+const { initUser, selectRobot, toggleTrading, getUser, handleChat } = require('../controllers/userController');
 const { validate, selectRobotSchema, toggleTradingSchema, chatSchema } = require('../middleware/validation');
 
 // User endpoints

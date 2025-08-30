@@ -1,7 +1,7 @@
-import { z } from 'zod';
+const { z } = require('zod');
 
 // Schema for validating the select robot request body
-export const selectRobotSchema = z.object({
+const selectRobotSchema = z.object({
   robotId: z.string({
     required_error: 'robotId is required',
     invalid_type_error: 'robotId must be a string',
@@ -9,7 +9,7 @@ export const selectRobotSchema = z.object({
 });
 
 // Schema for validating the toggle trading status request body
-export const toggleTradingSchema = z.object({
+const toggleTradingSchema = z.object({
   isRunning: z.boolean({
     required_error: 'isRunning is required',
     invalid_type_error: 'isRunning must be a boolean',
@@ -17,7 +17,7 @@ export const toggleTradingSchema = z.object({
 });
 
 // Schema for validating the chat message request body
-export const chatSchema = z.object({
+const chatSchema = z.object({
   text: z.string({
     required_error: 'text is required',
     invalid_type_error: 'text must be a string',
@@ -25,7 +25,7 @@ export const chatSchema = z.object({
 });
 
 // Schema for validating the update user request body from admin panel
-export const updateUserSchema = z.object({
+const updateUserSchema = z.object({
  name: z.string().optional(),
  balance: z.number().optional(),
  isBlocked: z.boolean().optional(),
@@ -33,12 +33,13 @@ export const updateUserSchema = z.object({
  timeLimit: z.number().optional(),
  comment: z.string().optional(),
 });
+
 /**
  * Middleware factory to validate request bodies against a Zod schema.
  * @param {ZodSchema} schema - The Zod schema to validate against.
  * @returns {Function} Express middleware function.
  */
-export const validate = (schema) => (req, res, next) => {
+const validate = (schema) => (req, res, next) => {
   try {
     schema.parse(req.body);
     next();
@@ -49,3 +50,11 @@ export const validate = (schema) => (req, res, next) => {
     });
   }
 };
+
+module.exports = {
+    selectRobotSchema,
+    toggleTradingSchema,
+    chatSchema,
+    updateUserSchema,
+    validate
+}
